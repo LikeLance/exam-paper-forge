@@ -1,0 +1,37 @@
+% ============================================================
+%  meta.tex —— 课程元信息（整份试卷唯一需要改动的配置）
+%  换一门课，只改这个文件，style.tex 不用动
+% ============================================================
+
+% ---- 学校与课程 ----
+\newcommand{\SchoolName}{示范大学}
+\newcommand{\CollegeName}{}          % 学院名，留空则不打印；填了会接在学校名后面
+\newcommand{\CourseName}{马克思主义基本原理}
+\newcommand{\TermName}{2026—2027 学年\quad 第 1 学期}
+\newcommand{\ExamDate}{}             % 考试日期，留空则不打印
+
+% ---- 卷面抬头 ----
+\newcommand{\MajorList}{全校各专业}   % 适用专业
+\newcommand{\ExamForm}{闭卷}                              % 开卷 / 闭卷 / 半开卷
+\newcommand{\ExamTime}{120 分钟}
+\newcommand{\TotalPoints}{100}
+\newcommand{\ScopeNote}{全课程}                           % 命题范围
+
+% ---- 卷面要素开关 ----
+% 1 = 显示，0 = 隐藏。密封线在双面印刷或不要求装订时可关掉
+\newcommand{\ShowSealLine}{1}
+\newcommand{\ShowScoreTable}{1}
+
+% ---- 密封线文字（仅 \ShowSealLine=1 时生效）----
+\newcommand{\SealText}{%
+班级\underline{\hspace{1.5cm}}\quad 学号\underline{\hspace{1.75cm}}\quad 姓名\underline{\hspace{1.45cm}}\qquad
+{\heiti 密}\ {\heiti 封}\ {\heiti 线}\qquad 请勿在密封线内答题}
+
+% ---- 试卷说明（三到四条为宜，超出会挤掉正文空间）----
+\newcommand{\ExamNotice}{1. 答案写在答题纸上，写在试题册上无效；2. 论述题要求观点明确、层次清晰、理论联系实际；3. 答题前请将密封线内项目填写清楚。}
+
+% ---- 答案册评分说明 ----
+\newcommand{\GradeNotice}{%
+名词解释按定义与关键要素给分；简答题按要点给分，答出核心术语与结论即可；%
+论述题按“观点—论证—结论”分层给分，观点正确、层次清晰、联系实际者可在该题分值内上浮 1～2 分；%
+材料分析题须结合材料作答，脱离材料空谈理论的酌情扣分。}

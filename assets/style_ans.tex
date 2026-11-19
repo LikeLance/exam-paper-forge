@@ -1,0 +1,51 @@
+% ============================================================
+%  style_ans.tex —— 参考答案与评分标准册样式
+%  在 style.tex 基础上覆盖页眉与卷头，增加答题要点/给分标记
+% ============================================================
+
+\input{style}
+
+% ---------- 页眉：把"试卷"换成"参考答案与评分标准" ----------
+\renewcommand{\juanmark}{A}
+\fancyhead[L]{\small\songti 《\CourseName》模拟试卷（\juanmark\ 卷）参考答案与评分标准}
+\fancyhead[R]{\small\songti 第 \thepage\ 页\quad 共 \pageref{LastPage} 页}
+
+% ---------- 答案册卷头 ----------
+\newcommand{\anstou}[1]{%
+\clearpage   % 先输出上一卷，避免页眉串卷
+\renewcommand{\juanmark}{#1}%
+\fancyhead[L]{\small\songti 《\CourseName》模拟试卷（#1 卷）参考答案与评分标准}%
+\begin{center}
+{\zihao{5}\songti \SchoolName\ \ \TermName}\\[4pt]
+{\zihao{4}\heiti 《\CourseName》期末考试模拟试卷（#1 卷）}\\[3pt]
+{\zihao{3}\heiti 参考答案及评分标准}
+\end{center}
+\vspace{-2pt}
+\hrule height 1.2pt
+\vspace{3pt}
+{\zihao{6}\songti 评分说明：\GradeNotice}
+\vspace{4pt}}
+
+% ---------- 结构宏 ----------
+% 大题标题（比试卷册轻，不带得分格）
+\newcommand{\datiA}[1]{%
+\vspace{8pt}\noindent{\heiti #1}\par\vspace{2pt}\hrule height 0.4pt\vspace{3pt}}
+
+% 小题序号
+\newcommand{\thao}[1]{\par\vspace{4pt}\noindent{\heiti #1}\ }
+
+% 答案类型标记
+\newcommand{\da}{\textbf{【答案】}}
+\newcommand{\jie}{\textbf{【解】}}
+\newcommand{\yaodian}{\textbf{【答案要点】}}
+\newcommand{\zhengming}{\textbf{【证明】}}
+
+% 给分点：\pingfen{2 分}  —— 灰楷小字，印出来像教研室的标注
+% 必须用 \hbox 包成不可断的整体：否则 \small 改变了该行的 height/depth，
+% 某行恰好排到行末时 TeX 会在下一行前多插一个 \baselineskip，出现莫名空行
+\newcommand{\pingfen}[1]{\hbox{\small\kaishu\color{black!55}（#1）}}
+
+% 填空题答案的三栏排布（每栏 5cm，一行三格）
+\newcommand{\fillhead}{\par\vspace{2pt}\begin{center}\zihao{5}%
+\begin{tabular}{@{}p{5.0cm}p{5.0cm}p{4.9cm}@{}}}
+\newcommand{\filltail}{\end{tabular}\end{center}\par}

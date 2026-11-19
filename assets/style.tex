@@ -1,0 +1,189 @@
+% ============================================================
+%  style.tex —— 通用期末模拟卷版式（试卷册）
+%  依赖：meta.tex（课程元信息）、ctexart 文档类、xelatex 编译
+%  设计目标：无课程耦合，任何课程的试卷都复用这一份
+% ============================================================
+
+\input{meta}
+
+% ---------- 版心：左侧留出 1.6cm 密封线，故左边距偏大 ----------
+\usepackage[a4paper,left=2.7cm,right=1.9cm,top=2.1cm,bottom=1.9cm,
+            headsep=0.35cm,footskip=0.9cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{array,tabularx,multirow}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,patterns}
+\usepackage{eso-pic}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{needspace}
+\usepackage{listings}
+\usepackage{etoolbox}   % \ifdefempty：让卷头可选行留空就不打印
+
+% ---------- 中文字体：有则用宋/黑/楷，无则回退 ctex 默认（macOS/Linux 友好）----------
+\IfFontExistsTF{SimSun}{%
+  \setCJKmainfont{SimSun}[BoldFont=SimHei,ItalicFont=KaiTi]%
+  \setCJKsansfont{SimHei}%
+}{}
+\IfFontExistsTF{FangSong}{\setCJKmonofont{FangSong}}{}
+\IfFontExistsTF{Consolas}{\setmonofont{Consolas}}{}
+
+% ---------- 全局行距与段距：行距偏紧以容纳更多题目 ----------
+\linespread{1.32}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+% 中文断行遇到"、"连排时容易挤出边界，给一点应急伸缩量吸收 2–6pt 的溢出
+\setlength{\emergencystretch}{2em}
+
+% ---------- 代码块（编程类课程用；不写代码的课程留空即可）----------
+\IfFontExistsTF{Consolas}{\setmonofont{Consolas}}{}
+\lstdefinestyle{excode}{
+  basicstyle=\ttfamily\fontsize{7.6pt}{10.4pt}\selectfont,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=none,
+  aboveskip=1pt,belowskip=1pt,
+  xleftmargin=1.4em,
+  showstringspaces=false,
+  breaklines=false,
+  extendedchars=false
+}
+\lstnewenvironment{code}[1][]{\lstset{style=excode,#1}}{}
+
+% ============================================================
+%  页眉页脚
+% ============================================================
+\newcommand{\juanmark}{A}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[L]{\small\songti \SchoolName《\CourseName》期末模拟试卷（\juanmark\ 卷）}
+\fancyhead[R]{\small\songti 第 \thepage\ 页\quad 共 \pageref{LastPage} 页}
+\fancyfoot[C]{}
+
+% ============================================================
+%  卷头
+%  \juantou{A}  —— 参数为卷别标记
+%  学校/学院/课程/学期/专业/日期全部从 meta.tex 取；留空的行自动不打印
+% ============================================================
+\newcommand{\juantou}[1]{%
+\clearpage   % 关键：先输出上一卷最后一页，此时 \juanmark 还是旧值，页眉才不会串卷
+\renewcommand{\juanmark}{#1}%
+\begin{center}
+{\zihao{5}\songti \SchoolName\ifdefempty{\CollegeName}{}{\ \CollegeName}\ \ \TermName}\\[4pt]
+{\zihao{3}\heiti 《\CourseName》期末考试模拟试卷（#1 卷）}\\[2pt]
+\ifdefempty{\MajorList}{}{\zihao{6}\kaishu 适用专业：\MajorList\\[3pt]}%
+{\zihao{6}\songti 考试形式：\ExamForm\ \ \ 考试时间：\ExamTime\ \ \ 满分：\TotalPoints\ 分\ \ \ 命题范围：\ScopeNote}%
+\ifdefempty{\ExamDate}{}{\\[2pt]{\zihao{6}\songti 考试日期：\ExamDate}}%
+\end{center}
+\vspace{-2pt}
+\hrule height 1.2pt
+\vspace{3pt}
+{\zihao{6}\songti 试卷说明：\ExamNotice}
+\vspace{4pt}
+}
+
+% ============================================================
+%  得分表
+%  大题数固定 5 或 6，用对应版本；分值之和自动计算
+%  \defenBiao{15}{20}{10}{20}{25}{10}      % 六个大题
+%  \defenBiaoFive{15}{20}{20}{25}{20}      % 五个大题
+% ============================================================
+\ExplSyntaxOn
+% 把 "15,20,10" 求和，用于得分表总分自动计算，杜绝手算错分
+\NewDocumentCommand{\ScoreSum}{m}{\int_eval:n {\clist_use:nn {#1} {+}}}
+\ExplSyntaxOff
+
+\newcommand{\defenBiao}[6]{%
+\ifnum\ShowScoreTable=1
+\begin{center}
+\zihao{6}
+\begin{tabularx}{\textwidth}{|>{\centering\arraybackslash}p{1.9cm}|*{6}{>{\centering\arraybackslash}X}|>{\centering\arraybackslash}p{1.5cm}|>{\centering\arraybackslash}p{1.6cm}|>{\centering\arraybackslash}p{1.6cm}|}
+\hline
+题\ \ 号 & 一 & 二 & 三 & 四 & 五 & 六 & 总分 & 合分人 & 复核人 \\ \hline
+满\ \ 分 & #1 & #2 & #3 & #4 & #5 & #6 & \ScoreSum{#1,#2,#3,#4,#5,#6} & & \\ \hline
+得\ \ 分 & & & & & & & & & \\ \hline
+\end{tabularx}
+\end{center}
+\vspace{2pt}
+\fi}
+
+\newcommand{\defenBiaoFour}[4]{%
+\ifnum\ShowScoreTable=1
+\begin{center}
+\zihao{6}
+\begin{tabularx}{\textwidth}{|>{\centering\arraybackslash}p{1.9cm}|*{4}{>{\centering\arraybackslash}X}|>{\centering\arraybackslash}p{1.5cm}|>{\centering\arraybackslash}p{1.6cm}|>{\centering\arraybackslash}p{1.6cm}|}
+\hline
+题\ \ 号 & 一 & 二 & 三 & 四 & 总分 & 合分人 & 复核人 \\ \hline
+满\ \ 分 & #1 & #2 & #3 & #4 & \ScoreSum{#1,#2,#3,#4} & & \\ \hline
+得\ \ 分 & & & & & & & \\ \hline
+\end{tabularx}
+\end{center}
+\vspace{2pt}
+\fi}
+
+\newcommand{\defenBiaoFive}[5]{%
+\ifnum\ShowScoreTable=1
+\begin{center}
+\zihao{6}
+\begin{tabularx}{\textwidth}{|>{\centering\arraybackslash}p{1.9cm}|*{5}{>{\centering\arraybackslash}X}|>{\centering\arraybackslash}p{1.5cm}|>{\centering\arraybackslash}p{1.6cm}|>{\centering\arraybackslash}p{1.6cm}|}
+\hline
+题\ \ 号 & 一 & 二 & 三 & 四 & 五 & 总分 & 合分人 & 复核人 \\ \hline
+满\ \ 分 & #1 & #2 & #3 & #4 & #5 & \ScoreSum{#1,#2,#3,#4,#5} & & \\ \hline
+得\ \ 分 & & & & & & & & \\ \hline
+\end{tabularx}
+\end{center}
+\vspace{2pt}
+\fi}
+
+% ============================================================
+%  大题标题（自带得分/评阅人格）
+%  \dati{一、填空题}{每空 1 分，共 15 分}
+% ============================================================
+\newcommand{\dati}[2]{%
+\needspace{4.6cm}
+\vspace{8pt}
+\begin{center}\zihao{6}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{0.635\textwidth}|>{\centering\arraybackslash}X|>{\centering\arraybackslash}X|}
+\hline
+\heiti #1（#2） & 得\ 分 & 评\ 阅\ 人 \\ \hline
+ & \rule{0pt}{1.0cm} & \\ \hline
+\end{tabularx}
+\end{center}
+\vspace{1pt}}
+
+% ============================================================
+%  题目与答题区
+% ============================================================
+% 单行题目：自动悬挂缩进，续行与小序号对齐
+\newcommand{\xiaoti}[1]{\par\vspace{3.2pt}\noindent\hangindent=1.6em\hangafter=1 #1\par}
+
+% 填空线：\kong 默认 2.4cm，可按答案长度传参 \kong[1.3cm]
+\newcommand{\kong}[1][2.4cm]{\underline{\hspace{#1}}}
+
+% 答题空白：用不可分割的 parbox，避免被排版吞掉或跨页撕裂
+\newcommand{\kongbai}[1]{\par\vspace{0.12cm}\noindent\parbox[t][#1][t]{\linewidth}{\rule{0pt}{0pt}}\par}
+
+% 题目+答题区整体不跨页：\begin{ti} ... \kongbai{4cm} ... \end{ti}
+\newenvironment{ti}{\par\vspace{3pt}\noindent\begin{minipage}{\linewidth}%
+\setlength{\parindent}{0pt}\setlength{\parskip}{0pt}}{\end{minipage}\par}
+
+% 插图题注（统一小一号字，居中）
+\newcommand{\tucaption}[1]{\begin{center}\zihao{6}\songti #1\end{center}}
+
+% ============================================================
+%  密封线（每页背景层，可用 \ShowSealLine 关闭）
+% ============================================================
+\newcommand{\sealLine}{%
+\ifnum\ShowSealLine=1
+\AddToShipoutPictureBG{%
+\begin{tikzpicture}[remember picture,overlay]
+\draw[densely dashed,line width=0.5pt]
+  ([xshift=1.62cm]current page.north west)--([xshift=1.62cm]current page.south west);
+\node[rotate=-90,font=\zihao{6}\songti]
+  at ([xshift=1.02cm,yshift=-14.85cm]current page.north west) {\SealText};
+\end{tikzpicture}}%
+\fi}

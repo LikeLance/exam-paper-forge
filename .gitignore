@@ -1,0 +1,22 @@
+# LaTeX 中间产物
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 样例的中间产物（PDF 保留，便于直接看效果）
+examples/*/main_*.aux
+examples/*/main_*.log
+
+# Python
+__pycache__/
+*.pyc
