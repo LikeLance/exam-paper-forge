@@ -16,6 +16,7 @@ init_exam.py —— 为任意学校、任意课程生成期末模拟卷工程骨
 
 import argparse
 import copy
+import json
 import re
 import shutil
 import sys
@@ -81,6 +82,52 @@ PRESET_GRADE = {
                  r"翻译题按忠实与通顺两方面各占一半给分；"
                  r"写作题按内容、结构、语言三项分档给分，字数不足按比例扣分。"),
 }
+
+
+def gen_plan_md(prof: dict, plan: list) -> str:
+    """把考情画像翻译成写题时照着做的双向细目表"""
+    total = prof.get("total", 100)
+    L = [f"# 命题计划 · {prof.get('course','')}", "",
+         f"> 由 `profile.json` 自动生成。写题时按下面的章节配额分配分值；",
+         f"> 每章实际分值偏离目标超过 4 分，`check_exam.py` 的 R10 会报警。", "",
+         "## 一、章节分值配额", "",
+         "| 章节 | 名称 | 目标分 | 占比 | 层次 | 必考 | 关键词 | 备注 |",
+         "|---|---|---|---|---|---|---|---|"]
+    for c in prof["chapters"]:
+        kw = "、".join(c.get("keywords", [])[:5])
+        L.append(f"| {c['id']} | {c['name']} | {c['points']} | "
+                 f"{c['points']/total*100:.0f}% | {c.get('level','')} | "
+                 f"{'是' if c.get('must') else ''} | {kw} | {c.get('note','')} |")
+    L += ["", f"**合计 {sum(c['points'] for c in prof['chapters'])} 分**", ""]
+
+    L += ["## 二、题型结构", "",
+          "| 大题 | 分值 | 题数 |", "|---|---|---|"]
+    for s in plan:
+        unit = "空" if s["kind"] == "fill" else "题"
+        L.append(f"| {s['title']} | {s['points']} | {s['n']} {unit} |")
+    L.append("")
+
+    if prof.get("style_notes"):
+        L += ["## 三、命题习惯（照这个来，别写成通用教材口吻）", ""]
+        L += [f"- {x}" for x in prof["style_notes"]]
+        L.append("")
+
+    heavy = [c for c in prof["chapters"] if c["points"] >= total * 0.15]
+    L += ["## 四、三套卷怎么分工", "",
+          f"- **A 卷（基础）**：必考章节全覆盖；非必考章节各出 1–2 道客观题；"
+          f"重点章（{'、'.join(c['id'] for c in heavy) or '无'}）出常规计算",
+          "- **B 卷（综合）**：把重点章两两组合出综合题；易混点做对比设问；难度上调但不出偏题",
+          "- **C 卷（拔高）**：压缩记忆题分值，把差额加到综合/设计题上；"
+          "至少一道题需要分情况讨论", ""]
+
+    L += ["## 五、硬约束", "",
+          f"- 各章实际分值偏离目标 ≤ {max(4, round(total*0.06))} 分",
+          "- 标记「必考」的章节分值不得为 0", ""]
+    if prof.get("excluded"):
+        L += ["- **明确不考**：" + "、".join(prof["excluded"]), ""]
+    if prof.get("sources"):
+        L += ["## 六、画像来源", ""] + [f"- {s}" for s in prof["sources"]] + [""]
+    return "\n".join(L)
 
 
 def S(kind, title, points, per=0, n=1, blank=4.2, extra="", opts=4):
@@ -376,6 +423,8 @@ def main():
     ap.add_argument("--out", help="输出目录")
     ap.add_argument("--papers", type=int, default=3, help="套数，默认 3")
     ap.add_argument("--scores", default=None, help="各大题分值，逗号分隔")
+    ap.add_argument("--profile", default=None,
+                    help="考情画像 profile.json（由 profile.py 生成）；给了就出 PLAN.md 并按章节配额约束")
     ap.add_argument("--no-seal", action="store_true", help="不印密封线")
     a = ap.parse_args()
 
@@ -398,6 +447,20 @@ def main():
 
     plan = build_plan(a.preset, a.scores)
     n_sec = len(plan)
+
+    prof = None
+    if a.profile:
+        pp = Path(a.profile).expanduser().resolve()
+        if not pp.exists():
+            raise SystemExit(f"画像文件不存在：{pp}")
+        prof = json.loads(pp.read_text(encoding="utf-8"))
+        chs = prof.get("chapters", [])
+        if not chs:
+            raise SystemExit("profile 里没有 chapters")
+        s = sum(c.get("points", 0) for c in chs)
+        if s != prof.get("total", 100):
+            raise SystemExit(f"画像章节分值合计 {s} ≠ total {prof.get('total', 100)}，先跑 profile.py check 修一下")
+        shutil.copy2(pp, out / "profile.json")
 
     for name in ("style.tex", "style_ans.tex"):
         shutil.copy2(ASSETS / name, out / name)
@@ -442,16 +505,23 @@ def main():
               + "".join(f"\\input{{ans_{L}}}\n" for L in letters_set) + "\\end{document}\n")
     (out / "main_paper.tex").write_text(main_p, encoding="utf-8")
     (out / "main_ans.tex").write_text(main_a, encoding="utf-8")
+    if prof:
+        (out / "PLAN.md").write_text(gen_plan_md(prof, plan), encoding="utf-8")
 
     print(f"已生成：{out}")
     print(f"  {a.course}｜{PRESETS[a.preset]['label']}｜{a.papers} 套｜满分 {a.points}")
+    if prof:
+        top = sorted(prof["chapters"], key=lambda c: -c["points"])[:3]
+        print("  考情画像：" + "、".join(f"{c['name']}({c['points']}分)" for c in top) + " 为重点")
     for i, s in enumerate(plan):
         unit = "空" if s["kind"] == "fill" else "题"
         print(f"  {CN_NUM[i]}、{s['title']:<8}{s['points']:>4} 分   {s['n']} {unit}")
     print("\n下一步：")
-    print("  1. 在 paper_A/B/C.tex 填题，ans_*.tex 填答案（编号已对齐，逐条替换占位文字即可）")
-    print(f"  2. python check_exam.py {out.name}")
-    print(f"  3. python build.py {out.name}")
+    if prof:
+        print("  1. 打开 PLAN.md，按章节配额表分配每道题（写题时对照着分，别凭感觉）")
+    print("  2. 在 paper_A/B/C.tex 填题，ans_*.tex 填答案（编号已对齐，逐条替换占位文字即可）")
+    print(f"  3. python check_exam.py {out.name}")
+    print(f"  4. python build.py {out.name}")
     return 0
 
 

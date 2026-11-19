@@ -192,7 +192,8 @@ def parse_answers(text: str):
 
 # ---------------- 检查 ----------------
 
-def check(exam_dir: Path, dup_threshold: float = 0.82):
+def check(exam_dir: Path, dup_threshold: float = 0.82, profile_path: str | None = None,
+          weight_tol: float | None = None):
     rep = Report()
     meta = find_meta(exam_dir)
     total = get_total_points(meta)
@@ -368,6 +369,51 @@ def check(exam_dir: Path, dup_threshold: float = 0.82):
             sev_list.append((SEV_WARN, f"{key} 卷还有 {n} 处占位未填（骨架状态），交付前须全部替换"))
     rep.merged("R09", sev_list, "无占位符残留，题目已全部填写")
 
+    # R10 章节权重：只有存在 profile.json 时才查（没有画像就不该凭空判分）
+    pp = Path(profile_path).expanduser() if profile_path else (exam_dir / "profile.json")
+    if pp.exists():
+        prof = json.loads(pp.read_text(encoding="utf-8"))
+        chapters = prof.get("chapters", [])
+        if chapters:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from profile import parse_tex, classify, build_weights
+
+            weights = build_weights(chapters)
+            tol = weight_tol if weight_tol else max(4.0, prof.get("total", 100) * 0.06)
+            sev_list, skipped = [], []
+            for key, p in papers.items():
+                if PLACEHOLDER.search(p["text"]):
+                    skipped.append(key)      # 骨架还没填题，权重检查无意义
+                    continue
+                actual, unknown = {}, 0.0
+                for stem, pts in parse_tex(p["file"]):
+                    cid = classify(stem, chapters, weights)
+                    if cid:
+                        actual[cid] = actual.get(cid, 0) + pts
+                    else:
+                        unknown += pts
+                for ch in chapters:
+                    got = actual.get(ch["id"], 0)
+                    diff = got - ch["points"]
+                    if ch.get("must") and got == 0:
+                        sev_list.append((SEV_ERROR,
+                                         f"{key} 卷「{ch['name']}」标记必考，但一分未出"))
+                    elif abs(diff) > tol * 1.5:
+                        sev_list.append((SEV_ERROR,
+                                         f"{key} 卷「{ch['name']}」目标 {ch['points']} 分，"
+                                         f"实际 {got:.0f} 分（{diff:+.0f}），偏离过大"))
+                    elif abs(diff) > tol:
+                        sev_list.append((SEV_WARN,
+                                         f"{key} 卷「{ch['name']}」目标 {ch['points']} 分，"
+                                         f"实际 {got:.0f} 分（{diff:+.0f}）"))
+                if unknown > tol:
+                    sev_list.append((SEV_WARN,
+                                     f"{key} 卷有 {unknown:.0f} 分未匹配到任何章节，"
+                                     f"检查画像关键词或章节划分是否漏了内容"))
+            if skipped:
+                sev_list.append((SEV_WARN, f"{'、'.join(skipped)} 卷仍是骨架，跳过章节权重检查"))
+            rep.merged("R10", sev_list, f"各章分值符合画像（容差 ±{tol:.0f} 分）")
+
     return rep, papers
 
 
@@ -377,6 +423,10 @@ def main():
     ap.add_argument("--strict", action="store_true", help="警告也视为失败")
     ap.add_argument("--json", action="store_true", help="输出 JSON")
     ap.add_argument("--threshold", type=float, default=0.82, help="查重阈值，默认 0.82")
+    ap.add_argument("--profile", default=None,
+                    help="考情画像路径，默认取 <exam_dir>/profile.json；没有则跳过 R10")
+    ap.add_argument("--weight-tol", type=float, default=None,
+                    help="章节分值容差（分），默认 max(4, 满分的 6%%)；拔高卷可放宽到 8–10")
     a = ap.parse_args()
 
     d = Path(a.exam_dir).expanduser().resolve()
@@ -384,7 +434,7 @@ def main():
         print(f"目录不存在：{d}")
         return 1
 
-    rep, _ = check(d, a.threshold)
+    rep, _ = check(d, a.threshold, a.profile, a.weight_tol)
     rep.dump(a.json)
 
     if rep.errors:

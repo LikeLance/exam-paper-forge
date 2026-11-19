@@ -18,11 +18,13 @@ agent_created: true
 ## 铁律（违反任何一条即视为未完成）
 
 1. **分值必须配平**：六大题分值之和 = 满分；填空「空数 × 每空分」、选择「题数 × 每题分」都要对得上。
-2. **三套卷不许撞题**：题干重复率超阈值即报错。同一考点可换角度考，不能换数字。
-3. **答案必须落在选项内**：单选答案不能指向不存在的选项；判断题答案只能是 √/×。
-4. **计算题答案自己验算过**：不确定的数宁可改小条件，也不许写"约为"。一道算错的题会毁掉整套卷的可信度。
-5. **占位符清零**：`（题干）`「（选项）」「（要点一」这些是骨架标记，交付前必须全部替换。
-6. **必须编译三遍**：只跑一遍会印出"共 ?? 页"，这是最常见的交付事故。
+2. **章节权重必须来自画像**：有 `profile.json` 就按它分配，不许按自己对这门课的印象重新分配。
+   没有画像时，要在交付说明里讲清楚"权重是通用均分，不是本校真题分布"。
+3. **三套卷不许撞题**：题干重复率超阈值即报错。同一考点可换角度考，不能换数字。
+4. **答案必须落在选项内**：单选答案不能指向不存在的选项；判断题答案只能是 √/×。
+5. **计算题答案自己验算过**：不确定的数宁可改小条件，也不许写"约为"。一道算错的题会毁掉整套卷的可信度。
+6. **占位符清零**：`（题干）`「（选项）」「（要点一」这些是骨架标记，交付前必须全部替换。
+7. **必须编译三遍**：只跑一遍会印出"共 ?? 页"，这是最常见的交付事故。
 
 ---
 
@@ -39,14 +41,78 @@ agent_created: true
 把素材整理成一张**考点清单**：`章节 | 知识点 | 认知层次(识记/理解/应用/综合) | 预估分值`。
 这一步不需要给用户看完整表格，但**你自己必须有**，否则三套卷必然失衡。
 
+### Step 0.5 对齐本校考情（决定成败的一步）
+
+同一门课，不同学校、不同老师的侧重差得很远：A 校必考设计题，B 校只考到第三章；
+同一个老师说"第 7 章不考"，这句话比任何教材目录都重要。
+
+**不要用模型对这门课的通用印象去分配权重**——那是"全国平均卷"，不是"你们学校的卷"。
+先做一份 `profile.json`（考情画像），再出卷。
+
+三条路径，按手头素材选：
+
+**路径 A：有往年卷（最准）**
+
+```bash
+# a. 先有章节 + 关键词（可从教材目录起）
+python scripts/profile.py from-outline outline.txt --course "机电传动控制" --out profile.json
+# b. 给每章补 3–8 个考点关键词，然后从真题反推分值
+python scripts/profile.py from-papers "2023A卷.tex" "2024B卷.pdf" --profile profile.json
+```
+
+`from-papers` 会按关键词把每道题归章、按分值汇总，输出各章应占多少分。
+**未分类比例高 = 你的章节划分漏了内容**，照着它打印出的未分类样本补关键词或加章节，重跑到 10% 以下。
+
+支持 `.tex`（结构最准）、`.txt` / `.md`（PDF 先 `pdftotext -layout` 转）。
+
+**路径 B：没有真题，但有教材目录和老师划的重点**
+
+```bash
+python scripts/profile.py from-outline outline.txt --course "××" --out profile.json
+python scripts/profile.py show profile.json     # 看当前权重
+```
+
+然后手工改 `points`（各章应占分值）和 `note`（老师原话，例如"第 5 章必考设计题"）。
+`must: true` 标记必考章——质检会强制它不为 0 分。
+
+**路径 C：什么都没有**
+
+```bash
+python scripts/profile.py init --course "××" --chapters 8 --out profile.json
+```
+
+按均分起底，**并在交付时明确告诉用户**："权重是按通用章节均分，不是你校真题分布；
+如果你能提供往年卷或老师划的重点，我可以重算。"
+
+**画像长这样**（`assets/profile.example.json` 是完整示例）：
+
+```json
+{
+  "course": "机电传动控制", "total": 100,
+  "chapters": [
+    {"id": "ch5", "name": "继电器-接触器控制系统", "points": 20, "level": "综合",
+     "must": true, "keywords": ["接触器", "自锁", "互锁", "行程开关"],
+     "note": "设计题主战场，必考自动往返"}
+  ],
+  "style_notes": ["判断题爱用“一定/都”设陷阱"],
+  "excluded": []
+}
+```
+
 ### Step 1 选预设、定结构
 
 ```bash
 python scripts/init_exam.py --list                          # 看八类学科预设
 python scripts/init_exam.py --preset engineering --course "机电传动控制" \
     --school "××大学" --college "机械工程学院" --majors "机械设计制造及其自动化" \
+    --profile profile.json \
     --out ./机电传动控制模拟卷
 ```
+
+带 `--profile` 会做两件事：把 `profile.json` 复制进工程目录（质检自动读取），
+并生成 **`PLAN.md` 命题计划**——里面有各章分值配额、题型结构、命题习惯、三套卷分工建议。
+
+**写题时必须对照 PLAN.md 分配分值**，不要凭感觉。偏离超过容差，R10 会报。
 
 预设只决定**题型配比与分值结构**，版式全部通用。预设与配比不合理时用 `--scores` 覆盖：
 `--scores 20,20,10,20,20,10`（按预设大题数量给）。
@@ -101,9 +167,14 @@ python scripts/check_exam.py ./... --strict                # 警告也算失败
 ```
 
 规则含义：R01 得分表配平 / R02 大题分值配平 / R03 填空空数 / R04 选择题选项完整性 /
-R05 答案与试卷逐题对齐、答案不越界 / R06 跨卷查重 / R07 答案册齐全 / R08 LaTeX 配平 / R09 占位清零。
+R05 答案与试卷逐题对齐、答案不越界 / R06 跨卷查重 / R07 答案册齐全 / R08 LaTeX 配平 /
+R09 占位清零 / **R10 章节权重符合画像**。
 
 R09 报「还有 N 处占位」= 卷子没写完，别交付。
+R10 只在目录里有 `profile.json` 时生效，按关键词把每道题归章、累加分值，与画像目标比对：
+偏差超容差报 WARN，超 1.5 倍报 ERROR；标 `must` 的章节一分未出直接 ERROR。
+
+拔高卷（C 卷）允许适度偏移，用 `--weight-tol 8` 放宽；但必考章节仍不能为空。
 
 ### Step 5 编译与核验
 
@@ -151,8 +222,10 @@ python scripts/build.py ./机电传动控制模拟卷 --clean
 ## 文件地图
 
 - `assets/` — 版式模板（style.tex 试卷 / style_ans.tex 答案册 / meta.tex 课程信息）
-- `scripts/init_exam.py` — 生成工程骨架（八类学科预设）
-- `scripts/check_exam.py` — 九条质检规则
+- `assets/profile.example.json` — 考情画像完整示例（九章、带关键词与命题习惯）
+- `scripts/profile.py` — 考情画像：from-outline / from-papers / check / show
+- `scripts/init_exam.py` — 生成工程骨架（八类学科预设，可挂 profile 出 PLAN.md）
+- `scripts/check_exam.py` — 十条质检规则
 - `scripts/build.py` — 三遍编译 + 溢出统计
 - `scripts/selftest.py` — 质检器自测（注入错误验证能抓到）
 - `references/exam-design.md` — 命题方法论：双向细目表、难度分布、三套卷差异化

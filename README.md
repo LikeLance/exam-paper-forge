@@ -28,6 +28,22 @@ python scripts/build.py ./机电传动
 
 ## 特性
 
+**考情画像：权重来自你们学校的真题，不是模型的印象**
+
+同一门课，不同学校能差出 20 分。所以先做一份 `profile.json`，再用它约束出卷：
+
+```bash
+# 从往年卷反推各章占多少分（tex / txt / md，PDF 先 pdftotext 转）
+python scripts/profile.py from-papers "2023A卷.tex" "2024B卷.tex" --profile profile.json
+
+# 没有真题：从教材目录起，手工填老师划的重点
+python scripts/profile.py from-outline outline.txt --course "机电传动控制" --out profile.json
+```
+
+画像里记四件事：各章分值、认知层次、命题习惯（"判断题爱用'一定'设陷阱"）、明确不考。
+`init_exam.py --profile` 会据此生成 **PLAN.md 命题计划**（双向细目表），
+`check_exam.py` 的 **R10** 会按关键词把每道题归章、累加分值，偏离配额就报错。
+
 **八类学科预设，一套版式**
 
 | 预设 | 适用 | 配比 |
@@ -43,7 +59,7 @@ python scripts/build.py ./机电传动
 
 **学校信息全参数化**：学校、学院、课程、学期、专业、考试日期、密封线开关，全在 `meta.tex` 一个文件里。留空的行不会打印。
 
-**九条质检规则**，专治 AI 出卷的翻车点：
+**十条质检规则**，专治 AI 出卷的翻车点：
 
 | 规则 | 查什么 |
 |---|---|
@@ -56,6 +72,7 @@ python scripts/build.py ./机电传动
 | R07 | 每卷都有答案册 |
 | R08 | LaTeX 花括号与 `$` 配平 |
 | R09 | 骨架占位符已全部替换 |
+| R10 | 各章分值符合考情画像；必考章不为 0 |
 
 **质检器自带自测**：`python scripts/selftest.py` 会往干净卷子里注入 5 类典型错误，
 验证每条规则都能抓到。抓不到就报 FAIL——这是"质检本身可信"的证据。
@@ -74,15 +91,19 @@ Windows 下字体自动用宋体/黑体/楷体；macOS/Linux 缺字体时自动�
 ### 三步出卷
 
 ```bash
+# 0. 先做考情画像（有往年卷就走第一条，没有就手工填重点）
+python scripts/profile.py from-papers "2023A卷.tex" "2024B卷.tex" --profile profile.json
+
 # 1. 看预设
 python scripts/init_exam.py --list
 
-# 2. 生成骨架（题数、空数、答题区高度都算好了）
+# 2. 生成骨架（题数、空数、答题区高度都算好了；带 profile 会出 PLAN.md）
 python scripts/init_exam.py \
     --preset humanities \
     --course "马克思主义基本原理" \
     --school "××大学" --college "马克思主义学院" \
     --majors "全校各专业" --time "120 分钟" \
+    --profile profile.json \
     --out ./马原模拟卷
 
 # 3. 填题 → 质检 → 编译
@@ -91,6 +112,7 @@ python scripts/build.py ./马原模拟卷 --clean
 ```
 
 生成的骨架里，每道题的位置、编号、答题区都排好了，你只需把 `（题干）`「（选项）」换成真实内容。
+带 `--profile` 时还会多出一份 `PLAN.md`，写着每章该占多少分、有哪些命题习惯要照着来。
 
 ### 自定义配比
 
@@ -136,14 +158,16 @@ exam-paper-forge/
 ├── assets/
 │   ├── style.tex               试卷版式（不用改）
 │   ├── style_ans.tex           答案册版式（不用改）
-│   └── meta.tex                学校/课程/学期/专业（只改这个）
+│   ├── meta.tex                学校/课程/学期/专业（只改这个）
+│   └── profile.example.json    考情画像示例（九章，带关键词与命题习惯）
 ├── scripts/
-│   ├── init_exam.py            生成工程骨架
-│   ├── check_exam.py           九条质检规则
+│   ├── profile.py              考情画像：从真题/教材目录反推章节权重
+│   ├── init_exam.py            生成工程骨架 + PLAN.md 命题计划
+│   ├── check_exam.py           十条质检规则
 │   ├── build.py                三遍编译 + 溢出统计
 │   └── selftest.py             质检器自测
 ├── references/
-│   ├── exam-design.md          命题方法论：双向细目表、难度分布、防撞题
+│   ├── exam-design.md          命题方法论：权重来源、双向细目表、防撞题
 │   ├── question-patterns.md    18 类题型的写法与陷阱
 │   ├── latex-cookbook.md       版式宏与 6 个真实踩坑
 │   └── course-profiles.md      八类学科的命题侧重
